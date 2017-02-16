@@ -1,0 +1,14 @@
+language: bash
+
+sudo: required
+
+services:
+  - docker
+
+script:
+  - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket iron/go:dev /bin/bash -c "go test -coverprofile=coverage.out; go build -o app"
+  - if [ "$TRAVIS_BRANCH" == "master" ]; then
+        docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
+        docker login -u="$DOCKER_USER" -p="$DOCKER_PASSWORD";
+        docker push aotallabs/frisket:"$TRAVIS_BUILD_NUMBER";
+fi
