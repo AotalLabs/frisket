@@ -1,16 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/opentracing/opentracing-go/mocktracer"
 )
 
 type stubS3 struct {
@@ -195,90 +191,5 @@ func TestQueueFull(t *testing.T) {
 	}
 	if sqsStruct.deleteReceived == nil || *sqsStruct.deleteReceived.QueueUrl != url || *sqsStruct.deleteReceived.ReceiptHandle != receipt {
 		t.Errorf("Did not receive correct parameters, got %v", sqsStruct.deleteReceived)
-	}
-}
-
-func TestDecompression(t *testing.T) {
-	if testing.Short() {
-		t.Skip("To test decompression run tests without short flag")
-	}
-	os.MkdirAll("processing", os.FileMode(0755))
-	defer os.RemoveAll("processing")
-
-	file, err := os.Open("test/test.tar.gz")
-	if err != nil {
-		t.Logf("Could not find gzip tarball, err: %v", err)
-		t.Fail()
-	}
-	defer file.Close()
-
-	mockTrace := mocktracer.New()
-
-	files, perr := decompress(file, mockTrace.StartSpan("TestDecompression"))
-	if perr != nil {
-		t.Logf("Unsuccessful decompression, err: %v", perr)
-		t.Fail()
-	}
-	if len(files) != 3 {
-		t.Log("Not enough files untared")
-		t.Fail()
-	}
-}
-
-func TestPDFConvert(t *testing.T) {
-	if testing.Short() {
-		t.Skip("To test pdf only conversion run tests without short flag")
-	}
-	os.MkdirAll("processed", os.FileMode(0755))
-	defer os.RemoveAll("processed")
-
-	mockTrace := mocktracer.New()
-
-	perr := convertFiles([]string{"test/testpdf.pdf"}, mockTrace.StartSpan("TestPDFConvert"))
-	if perr != nil {
-		t.Logf("Unsuccessful conversion, perr: %v", perr)
-		t.Fail()
-	}
-	testFile, _ := ioutil.ReadFile("test/testpdf.pdf")
-	processedFile, err := ioutil.ReadFile("processed/testpdf.pdf")
-	if err != nil {
-		t.Logf("Processed file not found, err: %v", err)
-		t.Fail()
-	}
-	if !bytes.Equal(testFile, processedFile) {
-		t.Log("Processed file is different")
-		t.Fail()
-	}
-}
-
-func TestDocConvert(t *testing.T) {
-	if testing.Short() {
-		t.Skip("To test document only conversion run tests without short flag")
-	}
-	os.MkdirAll("processed", os.FileMode(0755))
-	defer os.RemoveAll("processed")
-
-	mockTrace := mocktracer.New()
-
-	err := convertFiles([]string{"test/testdoc.docx"}, mockTrace.StartSpan("TestPDFConvert"))
-	if err != nil {
-		t.Logf("Unsuccessful conversion, err: %v", err)
-		t.Fail()
-	}
-}
-
-func TestHtmlConvert(t *testing.T) {
-	if testing.Short() {
-		t.Skip("To test html only conversion run tests without short flag")
-	}
-	os.MkdirAll("processed", os.FileMode(0755))
-	defer os.RemoveAll("processed")
-
-	mockTrace := mocktracer.New()
-
-	err := convertFiles([]string{"test/testhtml.html"}, mockTrace.StartSpan("TestPDFConvert"))
-	if err != nil {
-		t.Logf("Unsuccessful conversion, err: %v", err)
-		t.Fail()
 	}
 }
