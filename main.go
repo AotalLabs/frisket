@@ -35,9 +35,6 @@ import (
 	"github.com/uber/jaeger-client-go/transport/zipkin"
 )
 
-//url to your zipkin service
-const zipkinURL = os.Getenv("ZIPKIN_URL")
-
 var fatalLog = log.New(os.Stdout, "FATAL: ", log.LstdFlags)
 var infoLog = log.New(os.Stdout, "INFO: ", log.LstdFlags)
 var tick = flag.Int("tick", 1, "Number of seconds to wait before suggesting to poll the queue")
@@ -108,7 +105,7 @@ func initAWS() {
 // Setup the endpoint for tracing
 func initTracing() io.Closer {
 	transport, err := zipkin.NewHTTPTransport(
-		zipkinURL,
+		os.Getenv("ZIPKIN_URL"),
 		zipkin.HTTPBatchSize(10),
 		zipkin.HTTPLogger(jaeger.StdLogger),
 	)
