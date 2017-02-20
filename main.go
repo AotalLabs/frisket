@@ -115,7 +115,7 @@ func initTracing() io.Closer {
 	tracer, closer := jaeger.NewTracer(
 		os.Getenv("APP_SHORTCODE"),
 		jaeger.NewConstSampler(true),
-		jaeger.NewRemoteReporter(transport, nil),
+		jaeger.NewRemoteReporter(transport),
 	)
 	opentracing.SetGlobalTracer(tracer)
 	return closer
