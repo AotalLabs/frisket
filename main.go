@@ -36,7 +36,7 @@ import (
 )
 
 //url to your zipkin service
-const zipkinURL = "http://example.com"
+const zipkinURL = os.Getenv("ZIPKIN_URL")
 
 var fatalLog = log.New(os.Stdout, "FATAL: ", log.LstdFlags)
 var infoLog = log.New(os.Stdout, "INFO: ", log.LstdFlags)
