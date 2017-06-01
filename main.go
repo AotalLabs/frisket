@@ -19,6 +19,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	_ "net/http/pprof"
@@ -273,6 +275,8 @@ func processTar(filename string) *processingError {
 	err = exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-q", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...).Run()
 	stitchSp.Finish()
 	if err != nil {
+		infoLog.Printf("Files: %s\n", strings.Join(files, ", "))
+		time.Sleep(1 * time.Minute)
 		return &processingError{fmt.Errorf("Could not concatenate to output PDF, err: %v", err.Error()), 550}
 	}
 
@@ -350,7 +354,7 @@ func decompress(in io.Reader, parentSp opentracing.Span) ([]string, *processingE
 func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 	convertSp := opentracing.StartSpan("Converting Files", opentracing.ChildOf(parentSp.Context()))
 	defer convertSp.Finish()
-	toConvert := []string{}
+	notDone := []string{}
 	for _, file := range files {
 		content, err := getFileType(file)
 		if err != nil {
@@ -361,7 +365,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 			_, filename := filepath.Split(file)
 			err = os.Link(file, "processed/"+filename)
 			if err != nil {
-				return &processingError{fmt.Errorf("Could not link file %v, all files: %v, err: %v", filename, files, err), 541}
+				notDone = append(notDone, filename)
 			}
 		case "text/html", "text/htm":
 			in, err := os.Open(file)
@@ -371,7 +375,8 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 			_, filename := filepath.Split(file)
 			out, err := os.Create("processed/" + filename)
 			if err != nil {
-				return &processingError{fmt.Errorf("Could not create output file, err: %v", err), 540}
+				notDone = append(notDone, filename)
+				continue
 			}
 			cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
 			cmd.Stdin = in
@@ -380,29 +385,71 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 			in.Close()
 			out.Close()
 			if err != nil {
-				return &processingError{fmt.Errorf("Could not write to output file, err: %v", err), 542}
+				notDone = append(notDone, filename)
 			}
 		default:
-			toConvert = append(toConvert, file)
+			_, filename := filepath.Split(file)
+			documentStripSp := opentracing.StartSpan("Dos2Unix converting", opentracing.ChildOf(convertSp.Context()))
+			err := exec.Command("dos2unix", "--quiet", filename).Run()
+			documentStripSp.Finish()
+			if err != nil {
+				return &processingError{fmt.Errorf("Could not strip files got error %v", err.Error()), 543}
+			}
+			documentConvertSp := opentracing.StartSpan("Libreoffice converting", opentracing.ChildOf(convertSp.Context()))
+			notDone = libre(filename, notDone)
+			documentConvertSp.Finish()
 		}
 	}
 
-	if len(toConvert) > 0 {
-		documentStripSp := opentracing.StartSpan("Dos2Unix converting", opentracing.ChildOf(convertSp.Context()))
-		err := exec.Command("dos2unix", append([]string{"--quiet"}, toConvert...)...).Run()
-		documentStripSp.Finish()
-		if err != nil {
-			return &processingError{fmt.Errorf("Could not strip files got error %v", err.Error()), 543}
+	if len(notDone) > 0 {
+		for i := range notDone {
+			infoLog.Printf("%s summarized\n", notDone[i])
+			notDone[i] = fmt.Sprintf("<tr><td>%s</td></tr>", notDone[i])
 		}
-
-		documentConvertSp := opentracing.StartSpan("Libreoffice converting", opentracing.ChildOf(convertSp.Context()))
-		err = exec.Command("lowriter", append([]string{"--invisible", "--convert-to", "pdf:writer_pdf_Export:UTF8", "--outdir", "processed"}, toConvert...)...).Run()
-		documentConvertSp.Finish()
-		if err != nil {
-			return &processingError{fmt.Errorf("Could not convert files to PDF, err: %v", err), 543}
-		}
+		summary, _ := os.Create("processing/summary.html")
+		_, _ = summary.WriteString(style)
+		_, _ = summary.WriteString(fmt.Sprintf(table, strings.Join(notDone, "")))
+		summary.Close()
+		in, _ := os.Open("processing/summary.html")
+		out, _ := os.Create("processed/summary.pdf")
+		cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
+		cmd.Stdin = in
+		cmd.Stdout = out
+		_ = cmd.Run()
+		in.Close()
+		out.Close()
 	}
 	return nil
+}
+
+func libre(filename string, notDone []string) []string {
+	cmd := exec.Command("lowriter", "--invisible", "--convert-to", "pdf:writer_pdf_Export:UTF8", "--outdir", "processing", "processing/"+filename)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Start()
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	select {
+	case <-time.After(3 * time.Second):
+		infoLog.Printf("%s not printed\n", filename)
+		pgid, _ := syscall.Getpgid(cmd.Process.Pid)
+		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+			log.Fatal("failed to kill: ", err)
+		}
+		<-done
+		notDone = append(notDone, filename)
+	case err := <-done:
+		if err != nil {
+			infoLog.Printf("%s is error %s\n", filename, err)
+			notDone = append(notDone, filename)
+		}
+		err = os.Link("processing/"+filename+".pdf", "processed/"+filename+".pdf")
+		if err != nil {
+			notDone = append(notDone, filename)
+		}
+	}
+	return notDone
 }
 
 func getFileType(filename string) (string, error) {
@@ -426,3 +473,97 @@ func getFileType(filename string) (string, error) {
 	mediaType, _, _ := mime.ParseMediaType(http.DetectContentType(buffer))
 	return mediaType, nil
 }
+
+const table = "<div class=\"repzone\">" +
+	"<table cellspacing=1 cellpadding=2>" +
+	"<tr>" +
+	"<td align='left' style=\"font-weight:bold;\" class='s0med'>Files Not Processed</td>" +
+	"</tr>" +
+	"%s" +
+	"</table>" +
+	"</div>" +
+	"</div>"
+
+const style = "<div id=\"repprintarea\">" +
+	"<style type=\"text/css\">" +
+	"h2 {" +
+	"font-family: Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size: 15pt;" +
+	"}" +
+	".medheading {" +
+	"font-family: Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size: 12pt;" +
+	"font-weight: bold;" +
+	"}" +
+	".repzone table {" +
+	"border: 2px solid black;" +
+	"border-collapse:collapse;" +
+	"}" +
+	".repzone td {" +
+	"border: 1px solid black;" +
+	"font-family: Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size: 8pt;" +
+	"vertical-align: top;" +
+	"}" +
+	".repzone.error {" +
+	"color:red;" +
+	"font-weight:bold;" +
+	"}" +
+	".repzone.noterror {" +
+	"color:green;" +
+	"font-weight:bold;" +
+	"}" +
+	".bargraph table {" +
+	"border: none;" +
+	"}" +
+	".bargraph td {" +
+	"border: none;" +
+	"font-family: Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size: 8pt;" +
+	"vertical-align: top;" +
+	"}" +
+	".printtabtlabel {" +
+	"white-space: nowrap;" +
+	"font-weight: bold;" +
+	"}" +
+	".printtabllabel {" +
+	"white-space: nowrap;" +
+	"text-align: right;" +
+	"}" +
+	".printtabhighdata {" +
+	"background-color: #cccccc;" +
+	"}" +
+	".printtabgreendata {" +
+	"background-color: #ccffcc; " +
+	"}" +
+	".s0lt {" +
+	"background-color: #FFF5E6;" +
+	"}" +
+	".s0med {" +
+	"background-color: #FFE6BF;" +
+	"}" +
+	".s0full {" +
+	"background-color: #FFCC80;" +
+	"}" +
+	".s0dark {" +
+	"background-color: #BF9960;" +
+	"}" +
+	".repzone {" +
+	"font-family:Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size:8pt;" +
+	"}" +
+	".repzone DIV {" +
+	"font-family:Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size:8pt;" +
+	"}" +
+	".repzone p {" +
+	"margin:0;" +
+	"padding:0;" +
+	"font-family:Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size:8pt;" +
+	"}" +
+	".repzone A {" +
+	"font-family:Verdana, Arial, Helvetica, \"PT Sans\", sans-serif;" +
+	"font-size:8pt;" +
+	"}" +
+	"</style>"
