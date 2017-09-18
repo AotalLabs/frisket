@@ -7,9 +7,9 @@ services:
 
 install:
   - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket instrumentisto/glide install
-deploy:
-  provider: script
-  script: deploy.sh
-  skip_cleanup: true
-  on:
-    branch: master
+after_success:
+  - if [ "$TRAVIS_BRANCH" == "master" ]; then
+        docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
+        docker login -u="$DOCKER_USER" -p="$DOCKER_PASSWORD";
+        docker push aotallabs/frisket:"$TRAVIS_BUILD_NUMBER";
+    fi
