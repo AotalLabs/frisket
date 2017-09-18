@@ -274,7 +274,7 @@ func processTar(filename string) *processingError {
 		files = append(files, "processed/"+f.Name())
 	}
 	stitchSp := opentracing.StartSpan("Stitching", opentracing.ChildOf(processSp.Context()))
-	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-q", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
 	err = run(cmd)
 	stitchSp.Finish()
 	if err != nil {
@@ -489,10 +489,10 @@ func run(cmd *exec.Cmd) error {
         errLog.Println(cmd.Path, cmd.Args)
         errLog.Println(err.Error())
         if (stdout.Len() > 0) {
-            errLog.Println(stdout.String())
+            errLog.Println("Standard output", stdout.String())
         }
         if (stderr.Len() > 0) {
-            errLog.Println(stderr.String())
+            errLog.Println("Error stream", stderr.String())
         }
     }
     return err
