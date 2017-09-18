@@ -1,14 +1,14 @@
-language: bash
+language: go
 
 sudo: required
 
 services:
   - docker
 
-script:
-  - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket golang sh -c "go get && go test -coverprofile=coverage.out; go build -o app"
-  - if [ "$TRAVIS_BRANCH" == "master" ]; then
-        docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
-        docker login -u="$DOCKER_USER" -p="$DOCKER_PASSWORD";
-        docker push aotallabs/frisket:"$TRAVIS_BUILD_NUMBER";
-    fi
+install:
+  - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket instrumentisto/glide install
+deploy:
+  provider: script
+  script: deploy.sh
+  on:
+    branch: master
