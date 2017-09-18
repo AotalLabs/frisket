@@ -7,6 +7,9 @@ services:
 
 install:
   - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket instrumentisto/glide install
+script:
+  - go test -coverprofile=coverage.out;
+  - go build -o app; 
 after_success:
   - if [ "$TRAVIS_BRANCH" == "master" ]; then
         docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
