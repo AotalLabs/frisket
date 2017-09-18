@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"bytes"
 
 	_ "net/http/pprof"
 
@@ -39,6 +40,7 @@ import (
 
 var fatalLog = log.New(os.Stdout, "FATAL: ", log.LstdFlags)
 var infoLog = log.New(os.Stdout, "INFO: ", log.LstdFlags)
+var errLog = log.New(os.Stdout, "ERROR: ", log.LstdFlags)
 var tick = flag.Int("tick", 1, "Number of seconds to wait before suggesting to poll the queue")
 
 var s3session s3interface
@@ -272,10 +274,10 @@ func processTar(filename string) *processingError {
 		files = append(files, "processed/"+f.Name())
 	}
 	stitchSp := opentracing.StartSpan("Stitching", opentracing.ChildOf(processSp.Context()))
-	err = exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-q", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...).Run()
+	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-q", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+	err = run(cmd)
 	stitchSp.Finish()
 	if err != nil {
-		infoLog.Printf("Files: %s\n", strings.Join(files, ", "))
 		time.Sleep(1 * time.Minute)
 		return &processingError{fmt.Errorf("Could not concatenate to output PDF, err: %v", err.Error()), 550}
 	}
@@ -381,7 +383,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 			cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
 			cmd.Stdin = in
 			cmd.Stdout = out
-			err = cmd.Run()
+			err = run(cmd)
 			in.Close()
 			out.Close()
 			if err != nil {
@@ -390,7 +392,8 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 		default:
 			_, filename := filepath.Split(file)
 			documentStripSp := opentracing.StartSpan("Dos2Unix converting", opentracing.ChildOf(convertSp.Context()))
-			err := exec.Command("dos2unix", "--quiet", filename).Run()
+			command := exec.Command("dos2unix", "--quiet", filename)
+			err := run(command)
 			documentStripSp.Finish()
 			if err != nil {
 				return &processingError{fmt.Errorf("Could not strip files got error %v", err.Error()), 543}
@@ -415,7 +418,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 		cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
 		cmd.Stdin = in
 		cmd.Stdout = out
-		_ = cmd.Run()
+		_ = run(cmd)
 		in.Close()
 		out.Close()
 	}
@@ -472,6 +475,27 @@ func getFileType(filename string) (string, error) {
 	// Always returns a valid content-type and "application/octet-stream" if no others seemed to match.
 	mediaType, _, _ := mime.ParseMediaType(http.DetectContentType(buffer))
 	return mediaType, nil
+}
+
+func run(cmd *exec.Cmd) error {
+    var stderr bytes.Buffer
+    var stdout bytes.Buffer
+    if cmd.Stdout == nil {
+        cmd.Stdout = &stdout
+    }
+    cmd.Stderr = &stderr
+    err := cmd.Run()
+    if err != nil {
+        errLog.Println(cmd.Path, cmd.Args)
+        errLog.Println(err.Error())
+        if (stdout.Len() > 0) {
+            errLog.Println(stdout.String())
+        }
+        if (stderr.Len() > 0) {
+            errLog.Println(stderr.String())
+        }
+    }
+    return err
 }
 
 const table = "<div class=\"repzone\">" +
