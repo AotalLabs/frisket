@@ -358,9 +358,13 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 	defer convertSp.Finish()
 	notDone := []string{}
 	for _, file := range files {
-		content, err := getFileType(file)
-		if err != nil {
 
+		infoLog.Printf(" File being processed: - %s\n", file)
+
+		content, err := getFileType(file)
+
+		if err != nil {
+			errLog.Printf("conversion error was: %s", err)
 		}
 		switch content {
 		case "application/pdf":
