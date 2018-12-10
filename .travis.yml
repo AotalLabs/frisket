@@ -13,6 +13,6 @@ script:
 after_success:
   - if [ "$TRAVIS_BRANCH" == "master" ]; then
         docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
-        docker login -u="$DOCKER_USER" -p="$DOCKER_PASSWORD";
+        echo $DOCKER_PASSWORD | docker login --username $DOCKER_USER --password-stdin;
         docker push aotallabs/frisket:"$TRAVIS_BUILD_NUMBER";
     fi
