@@ -274,9 +274,17 @@ func processTar(filename string) *processingError {
 		files = append(files, "processed/"+f.Name())
 	}
 	stitchSp := opentracing.StartSpan("Stitching", opentracing.ChildOf(processSp.Context()))
-	cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+
+	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
 	err = run(cmd)
+
+	if err != nil {
+	    cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+        err = run(cmd)
+	}
+
 	stitchSp.Finish()
+
 	if err != nil {
 		time.Sleep(1 * time.Minute)
 		return &processingError{fmt.Errorf("Could not concatenate to output PDF, err: %v", err.Error()), 550}
