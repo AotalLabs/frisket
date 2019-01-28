@@ -278,10 +278,10 @@ func processTar(filename string) *processingError {
 	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
 	err = run(cmd)
 
-	if err != nil {
-	    cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
-        err = run(cmd)
-	}
+	//if err != nil {
+	//    cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+    //    err = run(cmd)
+	//}
 
 	stitchSp.Finish()
 
