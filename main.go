@@ -392,7 +392,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 				notDone = append(notDone, filename)
 				continue
 			}
-			cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
+			cmd := exec.Command("wkhtmltopdf", "--quiet", "--enable-toc-back-links", "-", "-")
 			cmd.Stdin = in
 			cmd.Stdout = out
 			err = run(cmd)
@@ -427,7 +427,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 		summary.Close()
 		in, _ := os.Open("processing/summary.html")
 		out, _ := os.Create("processed/summary.pdf")
-		cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
+		cmd := exec.Command("wkhtmltopdf", "--quiet", "--enable-toc-back-links", "-", "-")
 		cmd.Stdin = in
 		cmd.Stdout = out
 		_ = run(cmd)
