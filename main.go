@@ -275,13 +275,13 @@ func processTar(filename string) *processingError {
 	}
 	stitchSp := opentracing.StartSpan("Stitching", opentracing.ChildOf(processSp.Context()))
 
-	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+	cmd := exec.Command("gs", append([]string{"-dBATCH", "-dPrinted=false", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
 	err = run(cmd)
 
-	//if err != nil {
-	//    cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
-    //    err = run(cmd)
-	//}
+	if err != nil {
+	    cmd := exec.Command("gs", append([]string{"-dCompatibilityLevel=1.3", "-dBATCH", "-dPrinted=false", "-dNOPAUSE", "-dPDFFitPage", "-sOwnerPassword=reallylongandsecurepassword", "-sDEVICE=pdfwrite", "-sOutputFile=processed/" + filename + ".pdf"}, files...)...)
+        err = run(cmd)
+	}
 
 	stitchSp.Finish()
 
@@ -392,7 +392,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 				notDone = append(notDone, filename)
 				continue
 			}
-			cmd := exec.Command("wkhtmltopdf", "--quiet", "--enable-toc-back-links", "-", "-")
+			cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
 			cmd.Stdin = in
 			cmd.Stdout = out
 			err = run(cmd)
@@ -427,7 +427,7 @@ func convertFiles(files []string, parentSp opentracing.Span) *processingError {
 		summary.Close()
 		in, _ := os.Open("processing/summary.html")
 		out, _ := os.Create("processed/summary.pdf")
-		cmd := exec.Command("wkhtmltopdf", "--quiet", "--enable-toc-back-links", "-", "-")
+		cmd := exec.Command("wkhtmltopdf", "--quiet", "-", "-")
 		cmd.Stdin = in
 		cmd.Stdout = out
 		_ = run(cmd)
