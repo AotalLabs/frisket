@@ -1,19 +1,20 @@
-language: go
+language: 'go'
 
-sudo: required
+sudo: 'required'
 
 services:
-  - docker
+  - 'docker'
 
 install:
-  - docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket instrumentisto/glide install
+  - 'curl "https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.5/wkhtmltox_0.12.5-1.bionic_amd64.deb" -L -o "wkhtmltopdf.deb"'
+  - 'docker run --rm -v "$PWD":/go/src/github.com/aotallabs/frisket -w /go/src/github.com/aotallabs/frisket instrumentisto/glide install'
 script:
-  - go test -coverprofile=coverage.out;
-  - go build -o app;
+  - 'go test -coverprofile=coverage.out;'
+  - 'go build -o app;'
 after_success:
-  - if [ "$TRAVIS_BRANCH" == "master" ]; then
+  - 'if [ "$TRAVIS_BRANCH" == "master" ]; then
         docker build -t aotallabs/frisket:"$TRAVIS_BUILD_NUMBER" .;
         docker logout;
         docker login -u="$DOCKER_USER" -p="$DOCKER_PASSWORD";
         docker push aotallabs/frisket:"$TRAVIS_BUILD_NUMBER";
-    fi
+    fi'
